@@ -1,3 +1,5 @@
+# Para versão antiga do 7 Wonders BGA
+
 import bs4
 import json
 
@@ -16,15 +18,15 @@ CARDS = ['Stone Pit', 'Clay Pool', 'Ore Vein', 'Tree Farm', 'Excavation',
          'Observatory', 'Academy', 'University', 'Lodge', 'Study',
          'Arena', 'Chamber of Commerce', 'Haven', 'Lighthouse', 'Palace',
          'Gardens', 'Pantheon', 'Town Hall', 'Senate', 'Workers Guild',
-         'Craftmens Guild', 'Traders Guild', 'Philosophers Guild', 'Spies Guild', 'Decorators Guild',
-         'Shipowners Guild', 'Scientists Guild', 'Magistrates Guild', 'Builders Guild', 'Lumber Yard',
-         'Ludus', 'Castrum']
+         'Craftmens Guild', 'Traders Guild', 'Philosophers Guild', 'Spies Guild', 'Strategists Guild',
+         'Shipowners Guild', 'Scientists Guild', 'Magistrates Guild', 'Builders Guild', 'Lumber Yard']
 
 # Maravilhas na ordem do BGA
 # Referencia: https://x.boardgamearena.net/data/themereleases/current/games/sevenwonders/201016-1401/img/boards_v2.jpg
 WONDERS = ['Gizah A', 'Babylon A', 'Olympia A', 'Rhodos A', 'Ephesos A', 'Alexandria A', 'Halikarnassos A',
            'Gizah B', 'Babylon B', 'Olympia B', 'Rhodos B', 'Ephesos B', 'Alexandria B', 'Halikarnassos B']
- 
+
+ERA = 0
 
 # Obtem os dados de maravilha do tabuleiro recebido como parametro
 # Entrada:
@@ -87,6 +89,7 @@ def get_cards_played(parsed_html):
                 card_name = CARDS[c * 10 + l]
             else:
                 card_name = CARDS[0]
+
             cards_played.append(card_name)
 
     return cards_played
@@ -110,7 +113,10 @@ def get_boards(parsed_html):
             cards_played.append(get_cards_played(boardspace))
             coins.append(int(boardspace.find('div', attrs={'class':'sw_coins'}).find('span').text))
 
-    return wonders_data, cards_played, coins
+    # id = player_score_85035436 é exclusivo para a conta Mineradores
+    score = int(parsed_html.body.find('span', attrs={'id':'player_score_85035436'}).text)
+
+    return wonders_data, cards_played, coins, score
 
 # Obtem as cartas na mao do jogador
 # Entrada:
@@ -156,6 +162,48 @@ def get_hand_cards(parsed_html):
 
     return cards_canplay, cards_couldplay, cards_cantplay
 
+
+# Obtem a quantidade de cartas de cada tipo do jogador
+# Entrada:
+#   - cards_played: Lista com as cartas jogadas
+# Saída:
+#   - amount: dicionário com a quantidade de cartas de cada tipo
+def get_amount(cards_played):
+    amount = {
+        'civilian': 0,
+        'commercial': 0,
+        'guild': 0,
+        'manufactured_goods': 0,
+        'military': 0,
+        'raw_material': 0,
+        'scientific': 0
+    }
+
+    f = open('cards_id.json',)
+    cards_id = json.load(f)
+    f.close()
+
+    for card in cards_played:
+        cid = cards_id[card]
+
+        if 1 <= cid <= 14:
+            amount['raw_material'] += 1
+        elif 15 <= cid <= 17:
+            amount['manufactured_goods'] += 1
+        elif 18 <= cid <= 30:
+            amount['civilian'] += 1
+        elif 31 <= cid <= 42:
+            amount['commercial'] += 1
+        elif 43 <= cid <= 53:
+            amount['military'] += 1
+        elif 54 <= cid <= 65:
+            amount['scientific'] += 1
+        elif 66 <= cid <= 75:
+            amount['guild'] += 1
+
+    return amount
+
+
 # Obtem os recursos atuais do jogador
 # Entrada:
 #   - wonders_data: Lista com as informações de wonder
@@ -187,9 +235,9 @@ def get_resources(cards_played, wonder_data, coins):
     if wonder_name[:-2] == 'Gizah':
         resources['stone'] += 1
     elif wonder_name[:-2] == 'Babylon':
-        resources['wood'] += 1
-    elif wonder_name[:-2] == 'Olympia':
         resources['clay'] += 1
+    elif wonder_name[:-2] == 'Olympia':
+        resources['wood'] += 1
     elif wonder_name[:-2] == 'Rhodos':
         resources['ore'] += 1
         if wonder_name[-1] == 'A': # A side
@@ -268,14 +316,33 @@ def get_resources(cards_played, wonder_data, coins):
 #   - html: string do html da página completa
 #   - num_players: número de jogadores da partida
 def create_game_status(html, num_players, game_status_path='./game_status.json'):
+    global ERA
+
     parsed_html = bs4.BeautifulSoup(html, 'html.parser')
 
+    # Abre referencia para ID das cartas
+    f = open('cards_id.json',)
+    cards_id = json.load(f)
+    f.close()
+
     cards_canplay, cards_couldplay, cards_cantplay = get_hand_cards(parsed_html)
-    wonders_data, cards_played, coins = get_boards(parsed_html)
+    wonders_data, cards_played, coins, score = get_boards(parsed_html)
+
+    # Calcula turno atual
+    total_hand_cards = len(cards_canplay + cards_couldplay + cards_cantplay)
+    if total_hand_cards == 7:
+        ERA += 1
 
     data = {}
+    data['game'] = {}
+    data['game']['era'] = ERA
+    data['game']['turn'] = (ERA - 1) * 7 + (7 - total_hand_cards)
+    data['game']['clockwise'] = ERA == 1 or ERA == 3
+    data['game']['finished'] = (ERA == 3) and (total_hand_cards == 0)
+    data['game']['winner_id'] = -1
+
     data['players'] = {}
-    for i in range(num_players):
+    for i in range(1): #range(num_players):
         data['players'][str(i)] = {}
 
         data['players'][str(i)]['can_build_wonder'] = wonders_data[i]['can_build_wonder'][0] == 'canplay' or wonders_data[i]['can_build_wonder'][0] == 'couldplay'
@@ -296,13 +363,32 @@ def create_game_status(html, num_players, game_status_path='./game_status.json')
 
         data['players'][str(i)]['cards_played'] = cards_played[i]
         data['players'][str(i)]['resources'] = get_resources(cards_played[i], wonders_data[i], coins[i])
+        data['players'][str(i)]['amount'] = get_amount(cards_played[i])
 
-        # Add o resto desnecessario pra ficar igual o gerado pelo jogo
-        data['game'] = {}
-        data['game']['clockwise'] = ''
-        data['game']['era'] = ''
-        data['game']['turn'] = ''
+        # data['players'][str(i)]['can_build_hand_free'] = False
+        data['players'][str(i)]['points'] = {}
+        # data['players'][str(i)]['points']['civilian'] = 0
+        # data['players'][str(i)]['points']['commercial'] = 0
+        # data['players'][str(i)]['points']['guild'] = 0
+        # data['players'][str(i)]['points']['military'] = 0
+        # data['players'][str(i)]['points']['scientific'] = 0
+        data['players'][str(i)]['points']['total'] = score
+        # data['players'][str(i)]['points']['wonder'] = 0
+
+        # Add tambem os IDs das cartas
+        data['players'][str(i)]['cards_hand_id'] = []
+        for card_name in data['players'][str(i)]['cards_hand']:
+            data['players'][str(i)]['cards_hand_id'].append(cards_id[card_name])
+
+        data['players'][str(i)]['cards_playable_id'] = []
+        for card_name in data['players'][str(i)]['cards_playable']:
+            data['players'][str(i)]['cards_playable_id'].append(cards_id[card_name])
 
     with open(game_status_path, 'w') as outfile:
         json.dump(data, outfile)
         # print(game_status_path, 'criado.')
+
+
+def reset_variables():
+    global ERA
+    ERA = 0

@@ -1,31 +1,39 @@
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from time import sleep
 import json
 
 import scrapping_bga
 
-game_status_path = '../io/game_status.json'
-player_action_folder = '../io/'
+player_action_folder = './io'
+game_status_path = player_action_folder + '/game_status.json'
 
-browser = webdriver.Chrome(executable_path='./chromedriver.exe')
+options = Options()
+options.add_argument("--user-data-dir=cookies")
+options.add_experimental_option('excludeSwitches', ['enable-logging'])
+browser = webdriver.Chrome('/home/bettker/Desktop/Testes/7wonders-bga-plugin/chromedriver', options=options)
 
 browser.get('https://boardgamearena.com/')
 
-num_players = int(input('Number of players: '))
+num_players = 3 # int(input('Number of players: '))
 
-progress = -1
 
 try:
     while True:
-        input('Entre em uma partida e pressione Enter')
+        input('Entre em uma partida, escolha o tabuleiro, e pressione Enter para começar')
 
-        while progress < 100:
+        progress = -1
+        while progress < 92:
             # Espera comecar uma nova rodada
             while progress == int(browser.find_element_by_id('pr_gameprogression').text):
                 sleep(1)
             progress = int(browser.find_element_by_id('pr_gameprogression').text)
-            
             sleep(2)
+
+            # Se ta acabando o turno, sleep adicional para esperar batalha
+            if (26 <= progress <= 36) or (59 <= progress <= 69):
+                sleep(5)
+
             scrapping_bga.create_game_status(browser.page_source, num_players, game_status_path)
 
             # Espera tempo suficiente do bot computar e escrever a jogada no arquivo
@@ -38,6 +46,9 @@ try:
                 card = move['command']['argument']
 
                 print('[{0}%] {1} >> {2}'.format(progress, action, card))
+
+        print('Fim de jogo\n')
+        scrapping_bga.reset_variables()
 
 except Exception as e:
     print('Erro: ' + str(e))
