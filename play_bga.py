@@ -11,7 +11,7 @@ game_status_path = player_action_folder + '/game_status.json'
 options = Options()
 options.add_argument("--user-data-dir=cookies")
 options.add_experimental_option('excludeSwitches', ['enable-logging'])
-browser = webdriver.Chrome('/home/bettker/Desktop/7wonders-bga-plugin/chromedriver', options=options)
+browser = webdriver.Chrome('/home/bettker/Desktop/Testes/git/7wonders-bga-plugin/chromedriver', options=options)
 
 browser.get('https://boardgamearena.com/')
 

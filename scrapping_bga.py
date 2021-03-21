@@ -318,12 +318,16 @@ def create_game_status(html, num_players, game_status_path='./game_status.json')
     if total_hand_cards == 7:
         ERA += 1
 
+    # Se ultima rodada, pula (efeito de babylon, joga última carta)
+    if total_hand_cards <= 1:
+        return
+
     data = {}
     data['game'] = {}
     data['game']['era'] = ERA
     data['game']['turn'] = (ERA - 1) * 7 + (7 - total_hand_cards)
     data['game']['clockwise'] = ERA == 1 or ERA == 3
-    data['game']['finished'] = ERA == 3 and total_hand_cards >= 1
+    data['game']['finished'] = ERA == 3 and total_hand_cards <= 1
     data['game']['winner_id'] = -1
 
     data['players'] = {}
@@ -340,6 +344,13 @@ def create_game_status(html, num_players, game_status_path='./game_status.json')
             cards_playable = cards_canplay
             for c in cards_couldplay:
                 cards_playable.append(c[0])
+
+            # Remove se ja jogou (nao pode jogar duplicatas)
+            for _ in range(3):
+                for c in cards_playable:
+                    if c in cards_played[i]:
+                        cards_playable.remove(c)
+
             data['players'][str(i)]['cards_playable'] = cards_playable
             data['players'][str(i)]['cards_hand'] = cards_playable + cards_cantplay
         else:
@@ -350,15 +361,15 @@ def create_game_status(html, num_players, game_status_path='./game_status.json')
         data['players'][str(i)]['resources'] = get_resources(cards_played[i], wonders_data[i], coins[i])
         data['players'][str(i)]['amount'] = get_amount(cards_played[i])
 
-        # data['players'][str(i)]['can_build_hand_free'] = False
+        data['players'][str(i)]['can_build_hand_free'] = False
         data['players'][str(i)]['points'] = {}
-        # data['players'][str(i)]['points']['civilian'] = 0
-        # data['players'][str(i)]['points']['commercial'] = 0
-        # data['players'][str(i)]['points']['guild'] = 0
-        # data['players'][str(i)]['points']['military'] = 0
-        # data['players'][str(i)]['points']['scientific'] = 0
+        data['players'][str(i)]['points']['civilian'] = 0
+        data['players'][str(i)]['points']['commercial'] = 0
+        data['players'][str(i)]['points']['guild'] = 0
+        data['players'][str(i)]['points']['military'] = 0
+        data['players'][str(i)]['points']['scientific'] = 0
         data['players'][str(i)]['points']['total'] = score
-        # data['players'][str(i)]['points']['wonder'] = 0
+        data['players'][str(i)]['points']['wonder'] = 0
 
         # Add tambem os IDs das cartas
         data['players'][str(i)]['cards_hand_id'] = []
